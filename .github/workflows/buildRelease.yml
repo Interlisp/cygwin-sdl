@@ -46,7 +46,7 @@ jobs:
       - name: Fetch cygwin
         id: cygwin
         run: |
-          wget https://cygwin.com/setup-x86_64.exe -OutFile .\.github\workflows\setup-x86_64.exe
+          wget https://cygwin.com/setup-x86_64.exe -OutFile setup-x86_64.exe
 
       - name: Fetch SDL2
         id: SDL2
