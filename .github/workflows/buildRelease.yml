@@ -1,0 +1,93 @@
+#*******************************************************************************
+# buidRelease.yml
+#
+# Workflow to build SDL2 under cygwin and store results as a release.
+# Release will be used as by Maiko workflow code to build cygwin-sdl versions
+# of Maiko.
+#
+# Not building this as part of Maiko build because 1) it changes seldom and 2)
+# takes a long time to build, which we don't want to spend everytime we build
+# Maiko.
+#
+# 2023-06-12 by Frank Halasz
+#
+# Copyright 2023 by Interlisp.org
+#
+#
+# ******************************************************************************
+
+name: 'Build/Push SDL2'
+
+# Run this workflow on ...
+on: workflow_dispatch
+
+defaults:
+  run:
+    shell: powershell
+
+jobs:
+
+  build:
+
+    runs-on: windows-2022
+
+    steps:
+ 
+      # Set the SDL release we are building
+      - name: Parameters  
+        id: params
+        run: echo "sdl_version=2.26.5" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # Checkout the branch
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Fetch cygwin and sdl from net
+      - name: Fetch cygwin
+        id: cygwin
+        run: |
+          wget https://cygwin.com/setup-x86_64.exe -OutFile .\.github\workflows\setup-x86_64.exe
+
+      - name: Fetch SDL2
+        id: SDL2
+        env: 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download release-${{ steps.params.outputs.sdl_version }} --repo libsdl-org/SDL --pattern SDL2-${{ steps.params.outputs.sdl_version }}.tar.gz --output sdl2.tar.gz
+
+      # Install cygwin
+      - name: install_cygwin
+        run: |
+          Unblock-File .\setup-x86_64.exe
+          Start-Process .\setup-x86_64.exe -Wait -ArgumentList @("--root", ".\cygwin", "--quiet-mode", "--no-admin", "--wait", "--no-shortcuts", "--no-write-registry",  "--verbose", "--site", "http://www.gtlib.gatech.edu/pub/cygwin/", "--packages", "nano,binutils,make,cmake,gcc,clang")
+          .\cygwin\bin\bash -login -c 'sed -i -e "s/^none/#none/" /etc/fstab; echo "none / cygdrive binary,posix=0,user 0 0" >>/etc/fstab'
+
+      # Copy over SDL2 into cygwin and build it
+      - name: build_sdl2
+        run: |
+          mv sdl2.tar.gz .\cygwin\sdl2.tar.gz
+          .\cygwin\bin\bash -login -c 'cd / && tar xf sdl2.tar.gz && mv SDL2-* sdl2'
+          .\cygwin\bin\bash -login -c 'cd /sdl2 && ./configure && make && make install'
+          .\cygwin\bin\bash -login -c 'cd / && tar czf SDL2.tgz /usr/local/bin/SDL2.DLL /usr/local/bin /usr/local/include/SDL2 /usr/local/lib'
+          mv .\cygwin\SDL2.tgz .
+
+      # Push release
+      - name: push_release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: SDL2.tgz
+          tag: ${{ steps.params.outputs.sdl_version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+
+
+
+
+
+
+
+ 
+
